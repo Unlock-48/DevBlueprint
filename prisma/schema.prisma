@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum ItemStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum Origin {
+  EXPLICIT
+  INFERRED
+  PROPOSED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PARSED
+  FAILED
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum AnalysisStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  emailVerified   DateTime?
+  passwordHash    String?
+  name            String?
+  locale          String        @default("th")
+  theme           Theme         @default(SYSTEM)
+  createdAt       DateTime      @default(now())
+  deletedAt       DateTime?
+  memberships     Membership[]
+  analysesCreated AnalysisRun[] @relation("AnalysisRunCreatedBy")
+}
+
+model Workspace {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  name        String
+  createdAt   DateTime     @default(now())
+  deletedAt   DateTime?
+  memberships Membership[]
+  projects    Project[]
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Project {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  description String
+  starred     Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items       ChecklistItem[]
+  documents   Document[]
+  analyses    AnalysisRun[]
+
+  @@index([workspaceId, deletedAt])
+}
+
+model Document {
+  id          String          @id @default(cuid())
+  projectId   String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  contentText String
+  status      DocumentStatus  @default(UPLOADED)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chunks      DocumentChunk[]
+
+  @@index([projectId, createdAt])
+  @@index([projectId, status])
+}
+
+model DocumentChunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  chunkIndex  Int
+  contentText String
+  startOffset Int
+  endOffset   Int
+  createdAt   DateTime @default(now())
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId, chunkIndex])
+}
+
+model AnalysisRun {
+  id           String         @id @default(cuid())
+  projectId    String
+  createdById  String
+  provider     String
+  model        String
+  status       AnalysisStatus @default(PROCESSING)
+  resultJson   Json?
+  errorMessage String?
+  startedAt    DateTime       @default(now())
+  completedAt  DateTime?
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation("AnalysisRunCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([projectId, startedAt])
+  @@index([status])
+}
+
+model ChecklistItem {
+  id        String     @id @default(cuid())
+  projectId String
+  title     String
+  area      String
+  phase     String     @default("ทั่วไป")
+  details   String     @default("")
+  priority  String     @default("MEDIUM")
+  status    ItemStatus @default(TODO)
+  origin    Origin     @default(PROPOSED)
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, position])
+  @@index([projectId, status])
+}

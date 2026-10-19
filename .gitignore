@@ -36,6 +36,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local agent/tooling files
+/.agents/
+/.claude/
+/.cursor/
+/.devin/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
